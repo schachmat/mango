@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -15,9 +15,10 @@ var (
 	validPage *regexp.Regexp
 )
 
-func fail(w http.ResponseWriter, status int, message string) {
+func fail(w http.ResponseWriter, status int, err error) {
+	log.Println(err)
 	w.WriteHeader(status)
-	io.WriteString(w, message)
+	io.WriteString(w, err.Error())
 }
 
 func stripHeader(r io.ReadCloser, w io.Writer) {
@@ -34,7 +35,7 @@ func stripHeader(r io.ReadCloser, w io.Writer) {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	if !validPage.MatchString(r.RequestURI) {
-		fail(w, http.StatusNotFound, "could not match request to a manpage")
+		fail(w, http.StatusNotFound, errors.New(r.RequestURI+" is no valid manual"))
 		return
 	}
 
@@ -42,57 +43,57 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	man := exec.Command("man", "--path", page[1])
 	if page[0] != "" {
 		man = exec.Command("man", "--path", page[0], page[1])
+		page[1] = strings.Join(page, " ")
 	}
 
 	fname, err := man.Output()
 	if err != nil {
-		fail(w, http.StatusNotFound, "could not get filename for man"+page[0]+" "+page[1]+":"+err.Error())
+		fail(w, http.StatusNotFound, errors.New("manual for "+page[1]+" not found"))
 		return
 	}
 
 	bzcat := exec.Command("bzcat", strings.TrimSpace(string(fname)))
-	man2html := exec.Command("man2html", "-p", "-M", "", "-H", "localhost:8626")
+	man2html := exec.Command("false", "-p", "-M", "", "-H", "localhost:8626")
 
-	i, o := io.Pipe()
-	bzcat.Stdout = o
-	bzcat.Stderr = os.Stderr
-	man2html.Stdin = i
-	fr, fw := io.Pipe()
-	man2html.Stdout = fw
+	// Setup pipeline: bzcat -> man2html -> strip http header -> ResponseWriter
+	p1r, p1w := io.Pipe()
+	p2r, p2w := io.Pipe()
+	bzcat.Stdout = p1w
+	man2html.Stdin = p1r
+	man2html.Stdout = p2w
+	go stripHeader(p2r, w)
 
 	err = bzcat.Start()
 	if err != nil {
-		log.Fatal("bzcat.Start")
-		fail(w, http.StatusInternalServerError, "Could not start bzcat: "+err.Error())
+		fail(w, http.StatusInternalServerError, err)
 		bzcat.Wait()
 		return
 	}
 
 	err = man2html.Start()
 	if err != nil {
-		log.Fatal("man2html.Start")
-		fail(w, http.StatusInternalServerError, "Could not start man2html: "+err.Error())
+		fail(w, http.StatusInternalServerError, err)
+		p1w.Close()
 		bzcat.Wait()
-		o.Close()
 		man2html.Wait()
 		return
 	}
 
-	go stripHeader(fr, w)
+	go stripHeader(p2r, w)
 
 	err = bzcat.Wait()
 	if err != nil {
-		fail(w, http.StatusInternalServerError, "Could not wait for bzcat: "+err.Error())
-		o.Close()
+		fail(w, http.StatusInternalServerError, err)
+		p1w.Close()
 		man2html.Wait()
 		return
 	}
 
-	o.Close()
+	p1w.Close()
 
 	err = man2html.Wait()
 	if err != nil {
-		fail(w, http.StatusInternalServerError, "Could not wait for man2html: "+err.Error())
+		fail(w, http.StatusInternalServerError, err)
 		return
 	}
 }
