@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"io"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 )
 
 var (
+	listenAddr string
 	validPage *regexp.Regexp
 )
 
@@ -53,7 +55,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bzcat := exec.Command("bzcat", strings.TrimSpace(string(fname)))
-	man2html := exec.Command("man2html", "-p", "-M", "", "-H", "localhost:8626")
+	man2html := exec.Command("man2html", "-p", "-M", "", "-H", listenAddr)
 
 	// Setup pipeline: bzcat -> man2html -> strip http header -> ResponseWriter
 	p1r, p1w := io.Pipe()
@@ -100,9 +102,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func init() {
 	validPage = regexp.MustCompile(`/(?:([0-8n]p?)\+)?(.+)`)
+	flag.StringVar(&listenAddr, "listen", "localhost:8626", "On which address and port should we listen? Default is localhost:8626")
 }
 
 func main() {
+	flag.Parse()
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe("localhost:8626", nil))
+	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
