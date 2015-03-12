@@ -53,7 +53,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bzcat := exec.Command("bzcat", strings.TrimSpace(string(fname)))
-	man2html := exec.Command("false", "-p", "-M", "", "-H", "localhost:8626")
+	man2html := exec.Command("man2html", "-p", "-M", "", "-H", "localhost:8626")
 
 	// Setup pipeline: bzcat -> man2html -> strip http header -> ResponseWriter
 	p1r, p1w := io.Pipe()
