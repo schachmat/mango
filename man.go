@@ -104,5 +104,5 @@ func init() {
 
 func main() {
 	http.HandleFunc("/", handler)
-	http.ListenAndServe("localhost:8626", nil)
+	log.Fatal(http.ListenAndServe("localhost:8626", nil))
 }
