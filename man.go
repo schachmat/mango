@@ -1,3 +1,6 @@
+// Copyright 2015 Markus Teich <markus.teich(at)stusta.mhn.de>.
+// For license details see file LICENSE
+
 package main
 
 import (
@@ -54,6 +57,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// man pages are compressed with bzip on my system
 	bzcat := exec.Command("bzcat", strings.TrimSpace(string(fname)))
 	man2html := exec.Command("man2html", "-p", "-M", "", "-H", listenAddr)
 
@@ -101,6 +105,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
+	// This is no exact match, since e.g. 7p is no valid man section
 	validPage = regexp.MustCompile(`/(?:([0-8n]p?)\+)?(.+)`)
 	flag.StringVar(&listenAddr, "listen", "localhost:8626", "On which address and port should we listen? Default is localhost:8626")
 }
